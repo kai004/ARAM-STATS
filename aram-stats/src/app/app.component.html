@@ -1,0 +1,10 @@
+<form #userForm="ngForm" (ngSubmit)="onSubmit()" novalidate> 
+    {{userForm.value | json}}
+
+    {{summonerModel | json}}
+    <div class="form-group">
+        <input type="text" class="form-control" placeholder="Summoner Name" name="summonerName" [(ngModel)]="summonerModel.summonerName">
+    </div>
+    <button type="submit" class="btn btn-primary">Submit</button>
+</form>
+<router-outlet></router-outlet> 
