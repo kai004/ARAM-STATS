@@ -33,10 +33,10 @@ function summonerName(name){
     .catch(error => console.error(error))
 }
 
+//get champion list, only call when new champ release
 function get_Champions(){
     kayn.DDragon.Champion.list()
     .callback(function(error, champions) {
-        //console.log(champions.data)
 
         var champion_dict = {};
         for (champion in champions.data){
@@ -56,7 +56,7 @@ function get_Champions(){
 
     })
 }
-
+//given champ name, return champ id
 function get_Champions_id(name){
     const fs = require('fs')
     fs.readFile('./Reference', 'utf8' , (err, data) => {
@@ -68,7 +68,7 @@ function get_Champions_id(name){
         console.log(data_json)
         for (var champion in data_json){
            if (champion == name){
-                console.log(data_json[champion][0])
+                return data_json[champion][0]
            }
             
         }
