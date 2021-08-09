@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+mongoose.set('useFindAndModify', false);
 
 var matchesSchema = new mongoose.Schema({
     game : Number,
