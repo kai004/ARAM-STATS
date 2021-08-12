@@ -3,6 +3,7 @@ const { json } = require('body-parser')
 const { Kayn, REGIONS } = require('kayn')
 const fs = require('fs').promises;
 const util = require('util');
+const utils = require('./utilities');
 // Convert fs.readFile into Promise version of same    
 const readFile = util.promisify(fs.readFile);
 
@@ -32,13 +33,13 @@ const kayn = Kayn(process.env.RIOT_API_KEY)({
 })
 
 //given summoner name, return account id
-async function get_summoner_id(username, region) {
+async function get_account_id(username, region) {
     //gets summoner_id from username
     const summoner_id = await kayn.Summoner.by
       .name(username)
       .region(region)
       .then((summoner) => {
-        return summoner.id;
+        return summoner.accountId;
       });
     return summoner_id;
   }
@@ -70,7 +71,7 @@ async function get_champions_list() {
     for (champ in champ_list) {
       champ_dict[champ_list[champ].key] = champ;
     }
-    console.log(champ_dict)
+    //console.log(champ_dict)
     return champ_dict;
 }
 
@@ -178,47 +179,6 @@ async function get_full_matchlist(account_id, region, start_timestamp = 0) {
     return full_matchlist;
 }
 
-  
-async function get_subsection_matchlist(
-    account_id,
-    region,
-    start_index,
-    num_matches = 100,
-    start_timestamp
-  ) {
-    //Riot api only allows up to 100 matches to be returned at a time, so this function is recursively called on groups
-    //of 100 matches to get the full desired matchlist. see get_full_matchlist for additional comment
-    const matchlist = await kayn.Matchlist.by
-      .accountID(account_id)
-      .region(region)
-      .query({
-        queue: [utils.ARAM],
-        beginIndex: start_index,
-        endIndex: start_index + num_matches,
-        beginTime: start_timestamp,
-      })
-      .then((matchlist) => {
-        console.log(
-          'found',
-          matchlist.startIndex,
-          ' to ',
-          matchlist.endIndex,
-          'matches'
-        );
-        return matchlist;
-      })
-      .catch((error) => {
-        //the reason this is here is because when we ask riot api
-        //for a matchlist with a timestamp that is too large (i.e. this player has no games since then)
-        //riot api returns a 404 error specifically. This deals with it.
-        if (error.statusCode === 404) {
-          const matchlist = { matches: [] };
-          return matchlist;
-        }
-        throw error;
-      });
-    return matchlist;
-}
 
 async function get_match_info(
     match_id,
@@ -306,7 +266,134 @@ async function get_match_info(
       });
 }
 
+async function get_last_processed_game_timestamp(account_id, region) {
+    //gets last processed game timestamp for this account
+    const matchlist = await kayn.Matchlist.by
+      .accountID(account_id)
+      .region(region)
+      .query({
+        queue: [utils.ARAM],
+        beginIndex: 0,
+        endIndex: 1,
+      })
+      .then((matchlist) => {
+        return matchlist;
+      });
+    if (matchlist.matches.length === 0) {
+      return null;
+    }
+    const timestamp = matchlist.matches[0].timestamp;
+    return timestamp;
+}
+  async function get_icon_id(username, region) {
+    const icon_id = await kayn.Summoner.by
+      .name(username)
+      .region(region)
+      .then((summoner) => {
+        return summoner.profileIconId;
+      });
+    return icon_id;
+}
 
+async function get_subsection_matchlist(
+  account_id,
+  region,
+  start_index,
+  num_matches = 100,
+  start_timestamp
+) {
+  //Riot api only allows up to 100 matches to be returned at a time, so this function is recursively called on groups
+  //of 100 matches to get the full desired matchlist. see get_full_matchlist for additional comment
+  const matchlist = await kayn.Matchlist.by
+    .accountID(account_id)
+    .region(region)
+    .query({
+      queue: [utils.ARAM],
+      beginIndex: start_index,
+      endIndex: start_index + num_matches,
+      beginTime: start_timestamp,
+    })
+    .then((matchlist) => {
+      console.log(
+        'found',
+        matchlist.startIndex,
+        ' to ',
+        matchlist.endIndex,
+        'matches'
+      );
+      return matchlist;
+    })
+    .catch((error) => {
+      //the reason this is here is because when we ask riot api
+      //for a matchlist with a timestamp that is too large (i.e. this player has no games since then)
+      //riot api returns a 404 error specifically. This deals with it.
+      if (error.statusCode === 404) {
+        const matchlist = { matches: [] };
+        return matchlist;
+      }
+      throw error;
+    });
+  return matchlist;
+}
+
+async function get_recent_matches(account_id, region, champ_dict, username) {
+    //Gets most recent 10 games - just champ, KDA
+    const start_index = 0;
+    const num_matches = 10;
+    const args = [account_id, region, start_index, num_matches, 0];
+    matchlist = await utils.retry_async_function(get_subsection_matchlist, args);
+    let match_infos_must_await = [];
+    let recent_matches = [];
+    for (let j = 0; j < matchlist.matches.length; j++) {
+      let match_id = matchlist.matches[j].gameId;
+      let platform_id = matchlist.matches[j].platformId;
+      const match_args = [match_id, platform_id, account_id, region, username];
+      const match_info_must_await = utils.retry_async_function(
+        get_match_info,
+        match_args
+      );
+      match_infos_must_await.push(match_info_must_await);
+    }
+    let match_infos = await Promise.all(match_infos_must_await);
+    match_infos = match_infos.filter((match_info) => {
+      return !(match_info instanceof utils.SummonerNotInMatchError);
+    });
+    for (let i = 0; i < match_infos.length; i++) {
+      let match_info = match_infos[i];
+      let match_entry = {};
+      match_entry['champion'] = champ_dict[match_info['champ']];
+      match_entry['win'] = match_info['win'];
+      match_entry['kills'] = match_info['kills'];
+      match_entry['deaths'] = match_info['deaths'];
+      match_entry['assists'] = match_info['assists'];
+      recent_matches.push(match_entry);
+    }
+    return recent_matches;
+}
+
+async function get_live_game(summoner_id) {
+//gets live game from summoner_id - only aram games. if aram game not available returns null
+let players = [];
+const champ_dict = await get_champ_dict();
+const live_game_data = await kayn.CurrentGame.by
+    .summonerID(summoner_id)
+    .then((data) => {
+    //console.log(data);
+    // if(data.gameMode !== 'ARAM'){
+    //   return null;
+    // }
+    const participants = data.participants;
+    for (let i = 0; i < participants.length; i++) {
+        let player = {};
+        player.teamId = participants[i].teamId;
+        player.champion = champ_dict[participants[i].championId];
+        player.summonerName = participants[i].summonerName;
+        players.push(player);
+    }
+    return players;
+    });
+return live_game_data;
+}
 module.exports = {
     get_champions_list,
     get_champions_id,
@@ -317,9 +404,11 @@ module.exports = {
     get_full_matchlist,
     get_subsection_matchlist,
     get_match_info,
-    get_summoner_id,
-
-
+    get_account_id,
+    get_last_processed_game_timestamp,
+    get_subsection_matchlist,
+    get_live_game,
+    get_recent_matches
 };
 //summoner("Kai004");
 // var z = get_champions_id("Zoe")
@@ -337,4 +426,17 @@ module.exports = {
 // x.then(function(result){
 //         console.log(result)
 //     })
-get_champions_dict();
+
+// x = get_last_processed_game_timestamp('F-Wz8t72dzSp5SISpSiZoaFU4qutf2PUgvwRCKkKpbAUG8M', 'na')
+// x.then(function(result){
+//         console.log(result)
+//     }).catch(function(){
+//         console.log('promise rejected')
+//     })
+
+// x = get_summoner_id('Kai004', 'na')
+// x.then(function(result){
+//     console.log(result)
+// }).catch(function(){
+//     console.log('promise rejected')
+// })

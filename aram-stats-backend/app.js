@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const matches = require('./models/matches.model');
+const matches = require('./models/summoner_model');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const app = express();

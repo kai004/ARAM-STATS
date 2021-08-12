@@ -1,59 +1,43 @@
 const mongoose = require('mongoose');
 mongoose.set('useFindAndModify', false);
+const Schema = mongoose.Schema;
 
-var matchesSchema = new mongoose.Schema({
-    game : Number,
-    matchId :String,
-    length : Number,
-    accountID :String,
-    participantID : Number,
-    championID :String,
-    gameResult :String,
-    mapSide :String,
-    firstBlood :String,
-    firstTower :String,
-    firstInhib :String,
-    kills : Number,
-    deaths : Number,
-    assists : Number,
-    item0 : Number,
-    item1 : Number,
-    item2 : Number,
-    item3 : Number,
-    item4 : Number,
-    item5 : Number,
-    item6 : Number,
-    teamTowerKills : Number,
-    teamInhibitorKills : Number,
-    largestKillingSpree : Number,
-    largestMultiKill : Number,
-    killingSprees : Number,
-    longestTimeSpentLiving : Number,
-    doubleKills : Number,
-    tripleKills : Number,
-    quadraKills : Number,
-    pentaKills : Number,
-    totalDamageDealt : Number,
-    largestCriticalStrike : Number,
-    totalDamageDealtToChampions : Number,
-    magicDamageDealtToChampions : Number,
-    physicalDamageDealtToChampions : Number,
-    trueDamageDealtToChampions : Number,
-    totalHeal : Number,
-    damageSelfMitigated : Number,
-    damageDealtToObjectives : Number,
-    timeCCingOthers : Number,
-    totalDamageTaken : Number,
-    magicalDamageTaken : Number,
-    physicalDamageTaken : Number,
-    trueDamageTaken : Number,
-    goldEarned : Number,
-    totalMinionsKilled : Number,
-    totalTimeCrowdControlDealt : Number,
-    championRoleOne :String,
-    championRoleTwo :String
+const schema = new mongoose.Schema({
+  accountId: String,
+  true_summoner_name: String,
+  region: String,
+  standardized_summoner_name: String,
+  last_updated_timestamp_ms: Number,
+  last_processed_game_timestamp_ms: Number,
+  per_champion_data: [
+    {
+      champion: String,
+      wins: Number,
+      total_games: Number,
+      kills: Number,
+      deaths: Number,
+      assists: Number,
+      cs: Number,
+      gold: Number,
+      damage_dealt: Number,
+      damage_taken: Number,
+      pentakills: Number,
+      duration_in_seconds: Number,
+    },
+  ],
+  recent_games: [
+    {
+      champion: String,
+      win: Boolean,
+      kills: Number,
+      deaths: Number,
+      assists: Number,
+    },
+  ],
+  icon_id: Number,
 });
 
-var matchesModel = mongoose.model('Summoner', matchesSchema);
+//Third argument to prevent pluralization
+const user_model = mongoose.model('user_data', schema, 'user_data');
 
-module.exports = matchesModel;
+module.exports = user_model;
